@@ -1,10 +1,10 @@
 .PHONY: build run clean build-ws clean-ws setup-env link-answer-sheet-folder
 
-# METASEJONG_PROJECT_PATH := ../metacom2025-metasejong
-METASEJONG_PROJECT_PATH := ../metacom2025
+METASEJONG_PROJECT_PATH := ../metacom2025-metasejong
+#METASEJONG_PROJECT_PATH := ../metacom2025
 
 link-answer-sheet-folder:
-	ln -s ${METASEJONG_PROJECT_PATH}/scenario-data/answer-sheets/ demo
+	ln -s ${METASEJONG_PROJECT_PATH}/scenario-data/answer-sheets demo
 
 # Docker operations
 build:
