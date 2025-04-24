@@ -1,0 +1,4 @@
+rclpy
+std_msgs
+python-dotenv 
+scipy

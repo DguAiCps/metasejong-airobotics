@@ -1,0 +1,21 @@
+# ROS2 빌드 디렉토리
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+# Python 캐시 파일
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# 개발 환경 파일
+.git
+.gitignore
+.vscode/
+.idea/
+
+# 기타 임시 파일
+*.swp
+*.swo
+*~ 
