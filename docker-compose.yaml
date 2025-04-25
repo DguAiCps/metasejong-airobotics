@@ -8,11 +8,13 @@ services:
     container_name: airobotics_client
     environment:
       - ROS_DOMAIN_ID=0
-      - ENV_METASEJONG_TEAM_NAME=team_passion_for_challenges
-      - ENV_METASEJONG_TEAM_TOKEN=87cef2059293b764451516c5e632e8b5
+      - ENV_METASEJONG_TEAM_NAME=REPLACE_YOUR_TEAM_NAME_HEAR
+      - ENV_METASEJONG_TEAM_TOKEN=REPLACE_YOUR_TEAM_TOKEN_HEAR
       - ENV_METASEJONG_TEAM_TARGET_STAGE=2
       - ENV_METASEJONG_SCENARIO_CAND=demo, dongcheon, jipyhyeon, gwanggaeto 
       - ENV_METASEJONG_SCENARIO=demo
+      - ENV_DEMO_TEAM_NAME=demo_team
+      - ENV_DEMO_TEAM_TOKEN=18471a11421511d3c3a9f56c53bc8d57
       - VIRTUAL_ENV=/venv/metacom_client_env
       - PATH=/venv/metacom_client_env/bin:${PATH}
       - DISPLAY=${DISPLAY}

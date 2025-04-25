@@ -1,4 +1,4 @@
-.PHONY: build run clean build-ws clean-ws setup-env link-answer-sheet-folder
+.PHONY: build run clean build-ws clean-ws check-env link-answer-sheet-folder
 
 METASEJONG_PROJECT_PATH := ../metacom2025-metasejong
 #METASEJONG_PROJECT_PATH := ../metacom2025
@@ -25,8 +25,7 @@ clean-ws:
 	rm -rf metasejong_competitor_ws/build metasejong_competitor_ws/install
 
 # Environment setup
-setup-env:
-	bash -c "cd metasejong_competitor_ws && set -a && source .env && set +a	&& source install/setup.bash"
+check-env:
 	@if [ -z "$(ENV_METASEJONG_TEAM_NAME)" ] || [ -z "$(ENV_METASEJONG_TEAM_TOKEN)" ] || [ -z "$(ENV_METASEJONG_TEAM_TARGET_STAGE)" ]; then \
 		echo "Error: Required environment variables are not set"; \
 		echo "Please set ENV_METASEJONG_TEAM_NAME, ENV_METASEJONG_TEAM_TOKEN, and ENV_METASEJONG_TEAM_TARGET_STAGE"; \

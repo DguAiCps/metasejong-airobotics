@@ -25,11 +25,17 @@ class AiroboticsNode(Node):
         super().__init__('airobotics_node')
         
         # Check required environment variables
-        self.team_name = os.getenv('ENV_METASEJONG_TEAM_NAME')
-        self.team_token = os.getenv('ENV_METASEJONG_TEAM_TOKEN')
-        self.target_stage = int(os.getenv('ENV_METASEJONG_TEAM_TARGET_STAGE'))
+        self.team_name = os.getenv('ENV_METASEJONG_TEAM_NAME', '')
+        self.team_token = os.getenv('ENV_METASEJONG_TEAM_TOKEN', '')
+        self.target_stage = int(os.getenv('ENV_METASEJONG_TEAM_TARGET_STAGE', 1))
         self.scenario_field = os.getenv('ENV_METASEJONG_SCENARIO', 'demo')
-        
+
+        if self.scenario_field == 'demo':
+            if self.team_name == "REPLACE_YOUR_TEAM_NAME_HEAR" or self.team_name == "" or self.team_name == None:
+                self.team_name = os.getenv('ENV_DEMO_TEAM_NAME')
+            if self.team_token == "REPLACE_YOUR_TEAM_TOKEN_HEAR" or self.team_token == "" or self.team_token == None:
+                self.team_token = os.getenv('ENV_DEMO_TEAM_TOKEN')
+
         self.logger = self.get_logger()
 
         # Validate environment variables
