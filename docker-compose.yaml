@@ -24,7 +24,6 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${XAUTHORITY}:${XAUTHORITY}:ro
       - ./metasejong_competitor_ws:/workspace
-      - ./demo/:/data/:ro
       - ./answer-sheets/:/data/:ro
     network_mode: host
     privileged: true
