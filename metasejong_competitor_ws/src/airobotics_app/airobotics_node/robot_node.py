@@ -138,9 +138,9 @@ class MobileBaseCommander:
 
 METASEJONG_DEFAULT_NAMESPACE = ""
 
-ROBOT_TOPIC_CMD_VEL = "/metasejong2025/cmd_vel"
-ROBOT_TOPIC_ARM_MANIPULATOR = "/metasejong2025/ppcmd"
-ROBOT_TOPIC_ODOM = "/metasejong2025/odom"
+ROBOT_TOPIC_CMD_VEL = "/metasejong2025/robot/cmd_vel"
+ROBOT_TOPIC_ARM_MANIPULATOR = "/metasejong2025/robot/ppcmd"
+ROBOT_TOPIC_ODOM = "/metasejong2025/robot/odom"
 
 
 #   RobotNode is the main node for the robot status .

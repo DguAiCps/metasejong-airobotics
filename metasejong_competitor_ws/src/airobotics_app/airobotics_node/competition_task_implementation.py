@@ -24,8 +24,8 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 
-CONST_GLOBAL_NAVIGATION_DISTANCE = 1.5
-CONST_GLOBAL_PICK_DISTANCE = 0.78
+CONST_GLOBAL_NAVIGATION_DISTANCE = 1.0
+CONST_GLOBAL_PICK_DISTANCE = 0.75
 
 # 원통의 긴 축 = local Z → world 기준으로 변환
 def _compute_grasp_quaternion(o_euler_deg, r_quat_xyzw):
@@ -138,7 +138,7 @@ class TaskImplementation(CompetitionTask):
         stage1_answer = []
 
         #   Delay for 10 seconds for demo. emulate the time for object detection and pose estimation
-        time.sleep(10)
+        time.sleep(5)
 
         self.object_detection_result = self.answer_sheet['mission_objects']
         for object_detection in self.object_detection_result:
@@ -287,7 +287,7 @@ class TaskImplementation(CompetitionTask):
             self._demo_implementation___locate_robot_to_target_position(
                 center_position, 
                 CONST_GLOBAL_PICK_DISTANCE, 
-                math.pi/720,      # 360도 중 1도
+                math.pi/720,      # 360도 중 0.5도
                 0.1             # 0.1초 마다 움직임
             )
             
@@ -332,7 +332,7 @@ class TaskImplementation(CompetitionTask):
         self.robot_node.pick_up_object(pick_and_place_command)
 
         # loop interval time 
-        time.sleep(15)
+        time.sleep(20)
 
 
     #   Demo implementation for select next object to pick
@@ -391,6 +391,7 @@ class TaskImplementation(CompetitionTask):
             object_detection = self._demo_implementation___select_next_object()
             if object_detection is None:
                 self.logger.info("  - No more objects to pick")
+                self.force_stop = True
                 break
             
             if not object_detection['recyclable'] == True:

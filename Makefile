@@ -4,7 +4,11 @@ METASEJONG_PROJECT_PATH := ../metacom2025-metasejong
 #METASEJONG_PROJECT_PATH := ../metacom2025
 
 link-answer-sheet-folder:
-	ln -s ${METASEJONG_PROJECT_PATH}/scenario-data/answer-sheets demo
+	@if [ -d "answer-sheets" ]; then \
+		echo "Removing answer-sheets directory"; \
+		rm -rf answer-sheets; \
+	fi
+	ln -s ${METASEJONG_PROJECT_PATH}/scenario-data/answer-sheets answer-sheets
 
 # Docker operations
 build:
