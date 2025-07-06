@@ -9,10 +9,11 @@ import numpy as np
 
 foo = detect_objects()
 
-robot_position = [0, 0]
+robot_position = [0, 0, 16.5]
 
 bar = order_decision.visit_order(foo, [robot_position])[1:]
-object_coords = np.array([list(vec) for _, vec in bar])
+object_coords = np.array([value for d in bar for value in d.values()])
+print(object_coords)
 
 plt.scatter(object_coords[:,0], object_coords[:,1])
 plt.scatter(robot_position[0], robot_position[1], c='green')

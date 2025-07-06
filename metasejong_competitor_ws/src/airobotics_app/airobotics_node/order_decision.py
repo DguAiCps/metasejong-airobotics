@@ -115,12 +115,13 @@ def init_worker(coords, dmat):
 
 
 
-def visit_order(data, robot_pos) -> list[tuple[str, tuple]]:
-    items = [(key, tup)
-    for key, tup_list in data.items()
-            for tup in tup_list]
+def visit_order(data: list[dict[str, list[float]]], robot_pos) -> list[dict[str, list[float]]]:
+    items = [value
+             for d in data
+             for value in d.values()]
 
-    object_coords = np.concatenate([robot_pos, [inner for _, inner in items]])
+    object_coords = np.concatenate([robot_pos, items])
+    print(object_coords)
     num_objects = np.size(object_coords, axis=0)
 
     objects = list(range(num_objects))
@@ -147,5 +148,5 @@ def visit_order(data, robot_pos) -> list[tuple[str, tuple]]:
     print(f"최종 Fitness 값 (거리+각도): {fit:.3f}")
 
 
-    result = [items[i-1] for i in order]
+    result = [data[i-1] for i in order]
     return result

@@ -9,7 +9,7 @@ from ultralytics import YOLO
 import shutil
 import signal
 
-def detect_objects():
+def detect_objects() -> list[dict[str, list[float]]]:
     """
     Capture images from cameras, detect objects using YOLO, and return object centers.
 
@@ -53,31 +53,42 @@ def detect_objects():
                 # Calculate center coordinates
                 center_x = (bbox[0] + bbox[2]) / 2
                 center_y = (bbox[1] + bbox[3]) / 2
-
+                # z cor for demo_1 : 16.5, demo_2 : 16.8
                 # Store center coordinates by object class name
-                object_centers[class_name].append((center_x, center_y))
+                if image_file == '1.jpg':
+                    object_centers[class_name].append([center_x, center_y,16.5])
+                elif image_file == '2.jpg':
+                    object_centers[class_name].append([center_x, center_y,16.8])
 
                 print(f"  {i+1}. {class_name}: confidence={confidence:.2f}")
                 print(f"     Center: ({center_x:.1f}, {center_y:.1f})")
         else:
             print(f"No objects detected in {image_file}")
 
-    # Clean up image files
     for image_file in image_files:
         if os.path.exists(image_file):
             os.remove(image_file)
             print(f"Removed {image_file}")
+    
+    result = [
+    {key: sub_list}           # 새 딕셔너리
+    for key, list_of_lists in object_centers.items()
+    for sub_list in list_of_lists
+    ]
+    #print(result)
+    return result
 
-    return object_centers
 
 # Optional: If you want to run this file directly for testing
 if __name__ == "__main__":
     centers = detect_objects()
     print("Detected object centers:")
-    for obj_class, coords in centers.items():
+    for item in centers:
+        obj_class = item.keys()
+        coords = item.values()
         print(f"{obj_class}: {coords}")
 
     # Example: Access specific object
-    if "juice" in centers:
-        print(f"\nJuice centers: {centers['juice']}")
+    #if "juice" in centers:
+    #    print(f"\nJuice centers: {centers['juice']}")
 
