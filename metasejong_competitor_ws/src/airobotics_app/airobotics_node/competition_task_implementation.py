@@ -177,6 +177,7 @@ class TaskImplementation(CompetitionTask):
                 # Get current position and orientation
                 robot_position = self.robot_node.get_robot_position()
                 robot_orientation = self.robot_node.get_robot_orientation()
+                self.logger.info(f"Robot position: {robot_position}")
                 
                 # Calculate distance to target
                 distance = math.sqrt(

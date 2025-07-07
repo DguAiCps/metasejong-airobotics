@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
+from pixel_to_cor import *
 from single_capture import capture_single_image
 from pathlib import Path
+from topic_collect import collect_demo_data
+import math
 import subprocess
 import time
 import os
@@ -17,14 +20,25 @@ def detect_objects() -> list[dict[str, list[float]]]:
         defaultdict: Dictionary with object class names as keys and list of center coordinates as values
                     Example: {'juice': [(100.5, 200.3), (150.2, 180.7)], 'apple': [(300.1, 400.2)]}
     """
+    print("오브젝트 감지 시작")
+
     # Capture images from cameras
     capture_single_image('/metasejong2025/cameras/demo_1/image_raw', '1.jpg')
     capture_single_image('/metasejong2025/cameras/demo_2/image_raw', '2.jpg')
     capture_single_image('/metasejong2025/cameras/demo_3/image_raw', '3.jpg')
-
+    q2star = np.array([ 0.5, -0.5,  -0.5,  0.5])
+    k, demo1_pos, demo1_rot, demo2_pos, demo2_rot = collect_demo_data()
     # Initialize object centers storage
     object_centers = defaultdict(list)
-
+    real_rot_1 = qmul([demo1_rot['x'], demo1_rot['y'], demo1_rot['z'], demo1_rot['w']],q2star)
+    real_rot_2 = qmul([demo2_rot['x'], demo2_rot['y'], demo2_rot['z'], demo2_rot['w']],q2star)
+    rpy_1 = quat_to_rpy(real_rot_1)
+    rpy_2 = quat_to_rpy(real_rot_2)
+    rpy_1_list = [rpy_1[2], rpy_1[1], rpy_1[0]]
+    rpy_2_list = [rpy_2[2], rpy_2[1], rpy_2[0]]
+    C_1 = [demo1_pos['x'], demo1_pos['y'], demo1_pos['z']]
+    C_2 = [demo2_pos['x'], demo2_pos['y'], demo2_pos['z']]
+    
     # Load YOLO model
     model_root = Path(__file__).resolve().parent
     model = YOLO(model_root / ".." / "resource" / "final.pt")
@@ -56,9 +70,11 @@ def detect_objects() -> list[dict[str, list[float]]]:
                 # z cor for demo_1 : 16.5, demo_2 : 16.8
                 # Store center coordinates by object class name
                 if image_file == '1.jpg':
-                    object_centers[class_name].append([center_x, center_y,16.5])
+                    world_cor = pixel_to_world_Z(center_x, center_y, k, C_1, rpy_1_list, 17.0)
+                    object_centers[class_name].append(world_cor.tolist()) 
                 elif image_file == '2.jpg':
-                    object_centers[class_name].append([center_x, center_y,16.8])
+                    world_cor = pixel_to_world_Z(center_x, center_y, k, C_2, rpy_2_list, 17.3)
+                    object_centers[class_name].append(world_cor.tolist())
 
                 print(f"  {i+1}. {class_name}: confidence={confidence:.2f}")
                 print(f"     Center: ({center_x:.1f}, {center_y:.1f})")
@@ -76,6 +92,7 @@ def detect_objects() -> list[dict[str, list[float]]]:
     for sub_list in list_of_lists
     ]
     #print(result)
+    #TODO: list[dict[str, list[dict[str, list]]]]로 만들기
     return result
 
 
