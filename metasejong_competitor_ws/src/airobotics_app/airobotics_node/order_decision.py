@@ -13,6 +13,33 @@ from tf2_msgs.msg import TFMessage
 
 from astar import astar, world_to_grid
 
+# A* 전역 변수
+_dist_grid_coords = None
+_dist_resolution  = None
+
+def _init_dist_worker(args):
+    """
+    ProcessPoolExecutor initializer.
+    grid_coords: List[ (row, col) ] 인덱스 쌍 리스트,
+    resolution: map.info.resolution
+    """
+    global _dist_grid_coords, _dist_resolution
+    _dist_grid_coords, _dist_resolution = args
+
+def _compute_dist(pair):
+    """
+    worker_fn for one (i,j) 쌍.
+    """
+    i, j = pair
+    si, sj = _dist_grid_coords[i]
+    gi, gj = _dist_grid_coords[j]
+    path = astar(_grid, (si, sj), (gi, gj))
+    if path:
+        return (i, j, len(path) * _dist_resolution)
+    else:
+        return (i, j, float('inf'))
+
+
 # 유전 알고리즘 파라미터
 population_size = 300
 generations = 100
@@ -26,7 +53,6 @@ object_coords = None
 distance_matrix = None
 num_objects = None
 middle = None
-
 
 def create_initial_population():
     population = []
@@ -161,17 +187,29 @@ def visit_order(data: List[Dict[str, List[float]]], entry_pos: List[float], exit
     n_obj  = coords.shape[0]
 
     # A*로 채운 거리 행렬
-    # TODO: 병렬화하기?
     print("A* 거리 행렬 계산 시작")
+    grid_coords = [
+        world_to_grid(coords[k], _map_msg, _tf)
+        for k in range(n_obj)
+    ]
+    resolution = _map_msg.info.resolution
+
+    tasks = [
+        (i, j)
+        for i in range(n_obj)
+        for j in range(n_obj)
+        if i != j
+    ]
+
     dmat = np.zeros((n_obj, n_obj), dtype=float)
-    for i in range(n_obj):
-        for j in range(n_obj):
-            if i == j:
-                continue
-            si, sj = world_to_grid(coords[i], _map_msg, _tf)
-            gi, gj = world_to_grid(coords[j], _map_msg, _tf)
-            path = astar(_grid, (si, sj), (gi, gj))
-            dmat[i, j] = (len(path) * _map_msg.info.resolution) if path else float('inf')
+    RESTARTS = (os.cpu_count() or 8) // 2
+    with ProcessPoolExecutor(
+        max_workers=RESTARTS,
+        initializer=_init_dist_worker,
+        initargs=((grid_coords, resolution),)
+    ) as pool:
+        for i, j, dist in pool.map(_compute_dist, tasks):
+            dmat[i, j] = dist
 
     # 병렬 GA
     print("병렬 GA 시작")
