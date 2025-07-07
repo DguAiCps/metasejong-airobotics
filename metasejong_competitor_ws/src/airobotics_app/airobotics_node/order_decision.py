@@ -14,16 +14,18 @@ from tf2_msgs.msg import TFMessage
 from astar import astar, world_to_grid
 
 # 유전 알고리즘 파라미터
-population_size = 1000
+population_size = 300
 generations = 100
 mutation_rate = 0.1
 alpha = 5.0  # 거리 중요도
 beta = 2.0   # 각도 변화 중요도
 START = 0
+END = None
 
 object_coords = None
 distance_matrix = None
 num_objects = None
+middle = None
 
 
 def create_initial_population():
@@ -31,7 +33,10 @@ def create_initial_population():
     for _ in range(population_size):
         chromosome = middle.copy()
         random.shuffle(chromosome)
-        population.append([START] + chromosome)
+        if END is not None:
+            population.append([START] + chromosome + [END])
+        else:
+            population.append([START] + chromosome)
     return population
 
 def angle_between(v1, v2):
@@ -41,10 +46,10 @@ def angle_between(v1, v2):
     return np.arccos(dot_product)  # radians
 
 def fitness(chromosome):
-    dist = sum(distance_matrix[chromosome[i], chromosome[i+1]] for i in range(num_objects-1))
+    dist = sum(distance_matrix[chromosome[i], chromosome[i+1]] for i in range(len(chromosome)-1))
 
     angle_change = 0.0
-    for i in range(num_objects-2):
+    for i in range(len(chromosome)-2):
         p_prev, p_cur, p_next = object_coords[chromosome[i:i+3]]
         v1, v2 = p_cur - p_prev, p_next - p_cur
         angle_change += np.arccos(
@@ -54,14 +59,19 @@ def fitness(chromosome):
     return alpha * dist + beta * angle_change
 
 def crossover(parent1, parent2):
-    start, end = sorted(random.sample(range(1, num_objects), 2))
+    max_pick = num_objects if END is None else num_objects - 1
+    start, end = sorted(random.sample(range(1, max_pick), 2))
     child = [None]*num_objects
     child[0] = START
+    if END is not None: child[END] = END
     child[start:end+1] = parent1[start:end+1]
 
     fill_positions = [item for item in parent2 if item not in child]
     fill_idx = 0
     for i in range(1, num_objects):
+        if END is not None and i == END:
+            continue
+
         if child[i] is None:
             child[i] = fill_positions[fill_idx]
             fill_idx += 1
@@ -69,7 +79,8 @@ def crossover(parent1, parent2):
 
 def mutate(chromosome):
     if random.random() < mutation_rate:
-        idx1, idx2 = random.sample(range(1, num_objects), 2)
+        picks = [i for i in range(1, num_objects) if i != END]
+        idx1, idx2 = random.sample(picks, 2)
         chromosome[idx1], chromosome[idx2] = chromosome[idx2], chromosome[idx1]
     return chromosome
 
@@ -81,7 +92,7 @@ def genetic_algorithm(worker_num, min_delta = 1e-6, patience = 20):
     wait_count = 0
 
     for generation in range(generations):
-        population.sort(key=lambda chromo: fitness(chromo))
+        population.sort(key=fitness)
 
         current_best = population[0]
         current_fitness = fitness(current_best)
@@ -117,24 +128,41 @@ def genetic_algorithm(worker_num, min_delta = 1e-6, patience = 20):
         raise Exception("염색체 선정 없음")
     return best_chromosome, best_fitness
 
-def init_worker(coords, dmat):
-    global object_coords, distance_matrix, num_objects, middle
+def init_worker(coords, dmat, end_idx):
+    global object_coords, distance_matrix, num_objects, middle, END
     object_coords  = coords
     distance_matrix = dmat
     num_objects    = coords.shape[0]
-    middle          = [c for c in range(num_objects) if c != START]
+    END = end_idx
+    if END is not None:
+        middle = [c for c in range(num_objects) if c not in (START, END)]
+    else:
+        middle = [c for c in range(num_objects) if c != START]
 
 
 
-def visit_order(data: List[Dict[str, List[float]]], robot_pos: List[float]) -> List[Dict[str, List[float]]]:
+def visit_order(data: List[Dict[str, List[float]]], entry_pos: List[float], exit_pos: None|List[float] = None) -> List[Dict[str, List[float]]]:
+    print("visit_order 호출")
+    print(f"data: {data}")
+    print(f"entry: {entry_pos}")
+    print(f"exit: {exit_pos}")
+
     items = [value
              for d in data
              for value in d.values()]
-    coords = np.vstack([robot_pos, np.array(items)])
+    
+    if exit_pos is not None:
+        coords = np.vstack([entry_pos, np.array(items), exit_pos])
+        END = coords.shape[0] - 1
+    else:
+        coords = np.vstack([entry_pos, np.array(items)])
+        END = None
+    
     n_obj  = coords.shape[0]
 
     # A*로 채운 거리 행렬
-    #T TODO: 병렬화하기?
+    # TODO: 병렬화하기?
+    print("A* 거리 행렬 계산 시작")
     dmat = np.zeros((n_obj, n_obj), dtype=float)
     for i in range(n_obj):
         for j in range(n_obj):
@@ -146,12 +174,13 @@ def visit_order(data: List[Dict[str, List[float]]], robot_pos: List[float]) -> L
             dmat[i, j] = (len(path) * _map_msg.info.resolution) if path else float('inf')
 
     # 병렬 GA
+    print("병렬 GA 시작")
     RESTARTS = (os.cpu_count() or 8) // 2
     print(f"방문 노드 개수: {n_obj}")
     print(f"병렬 스레드 개수: {RESTARTS}")
     with ProcessPoolExecutor(max_workers=RESTARTS,
                              initializer=init_worker,
-                             initargs=(coords, dmat)) as pool:
+                             initargs=(coords, dmat, END)) as pool:
         bests = list(pool.map(genetic_algorithm, range(RESTARTS)))
 
     
@@ -159,8 +188,12 @@ def visit_order(data: List[Dict[str, List[float]]], robot_pos: List[float]) -> L
     print(f"\n최적 오브젝트 방문 순서: {order}")
     print(f"최종 Fitness 값 (거리+각도): {fit:.3f}")
 
-
-    return [data[i-1] for i in order]
+    result = [
+        data[i-1]
+        for i in order
+        if i != START and not (exit_pos is not None and i == END)
+    ]
+    return result
 
 class _MapTfListener(Node):
     """

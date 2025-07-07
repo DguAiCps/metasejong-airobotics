@@ -12,7 +12,7 @@ from ultralytics import YOLO
 import shutil
 import signal
 
-def detect_objects() -> list[dict[str, list[float]]]:
+def detect_objects() -> dict[str, list[dict[str, list[float]]]]:
     """
     Capture images from cameras, detect objects using YOLO, and return object centers.
 
@@ -44,66 +44,61 @@ def detect_objects() -> list[dict[str, list[float]]]:
     model = YOLO(model_root / ".." / "resource" / "final.pt")
     image_files = ['1.jpg', '2.jpg', '3.jpg']
 
-    # Process each image
+    object_centers: dict[str, list[dict[str, list[float]]]] = {
+        img: [] for img in image_files
+    }
+
     for image_file in image_files:
         if not os.path.exists(image_file):
             print(f"Warning: {image_file} not found, skipping...")
             continue
 
         print(f"\nProcessing {image_file}...")
-
-        # Run inference
         results = model.predict(image_file, save=False)
-        result = results[0]
+        detections = results[0]
 
-        if result.boxes is not None and len(result.boxes) > 0:
-            print(f"Found {len(result.boxes)} objects in {image_file}:")
-            for i, box in enumerate(result.boxes):
-                class_id = int(box.cls[0])
+        if detections.boxes is not None and len(detections.boxes) > 0:
+            for box in detections.boxes:
+                class_id   = int(box.cls[0])
                 class_name = model.names[class_id]
-                confidence = float(box.conf[0])
-                bbox = box.xyxy[0].cpu().numpy()  # [x1, y1, x2, y2]
+                bbox       = box.xyxy[0].cpu().numpy()  # [x1, y1, x2, y2]
 
-                # Calculate center coordinates
-                center_x = (bbox[0] + bbox[2]) / 2
-                center_y = (bbox[1] + bbox[3]) / 2
-                # z cor for demo_1 : 16.5, demo_2 : 16.8
-                # Store center coordinates by object class name
+                # 픽셀 중심 계산
+                cx = float((bbox[0] + bbox[2]) / 2)
+                cy = float((bbox[1] + bbox[3]) / 2)
+
+                # 월드 좌표로 변환 (Z 값도 주의)
                 if image_file == '1.jpg':
-                    world_cor = pixel_to_world_Z(center_x, center_y, k, C_1, rpy_1_list, 17.0)
-                    object_centers[class_name].append(world_cor.tolist()) 
+                    world_cor = pixel_to_world_Z(cx, cy, k, C_1, rpy_1_list, 17.0)
                 elif image_file == '2.jpg':
-                    world_cor = pixel_to_world_Z(center_x, center_y, k, C_2, rpy_2_list, 17.3)
-                    object_centers[class_name].append(world_cor.tolist())
+                    world_cor = pixel_to_world_Z(cx, cy, k, C_2, rpy_2_list, 17.3)
+                else:
+                    # demo_3 카메라가 없다면 넘어가거나, 동일 처리
+                    continue
 
-                print(f"  {i+1}. {class_name}: confidence={confidence:.2f}")
-                print(f"     Center: ({center_x:.1f}, {center_y:.1f})")
+                # 최종 결과 리스트에 추가
+                object_centers[image_file].append({
+                    class_name: [float(world_cor[0]),
+                                 float(world_cor[1]),
+                                 float(world_cor[2])]
+                })
         else:
             print(f"No objects detected in {image_file}")
 
+    # 4) 임시 이미지 파일 삭제
     for image_file in image_files:
         if os.path.exists(image_file):
             os.remove(image_file)
             print(f"Removed {image_file}")
-    
-    result = [
-    {key: sub_list}           # 새 딕셔너리
-    for key, list_of_lists in object_centers.items()
-    for sub_list in list_of_lists
-    ]
-    #print(result)
-    #TODO: list[dict[str, list[dict[str, list]]]]로 만들기
-    return result
+
+    return object_centers
 
 
 # Optional: If you want to run this file directly for testing
 if __name__ == "__main__":
     centers = detect_objects()
     print("Detected object centers:")
-    for item in centers:
-        obj_class = item.keys()
-        coords = item.values()
-        print(f"{obj_class}: {coords}")
+    print(centers)
 
     # Example: Access specific object
     #if "juice" in centers:

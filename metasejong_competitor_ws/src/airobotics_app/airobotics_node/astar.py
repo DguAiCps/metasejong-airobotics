@@ -19,7 +19,7 @@ def astar(grid: np.ndarray,
           start: tuple[int, int],
           goal: tuple[int, int],
           soft_cost_func=soft_cost) -> list[tuple[int, int]] | None:
-    print("a star 알고리즘 시작")
+    # print("a star 알고리즘 시작")
     rows, cols = grid.shape
     directions = [(-1,  0, 1.0), (1, 0, 1.0), (0, -1, 1.0), (0, 1, 1.0),
                   (-1,-1, math.sqrt(2)), (-1,1, math.sqrt(2)),
@@ -70,8 +70,8 @@ def world_to_grid(coords, map, tf):
     res   = map.info.resolution
     ox, oy = map.info.origin.position.x, map.info.origin.position.y
 
-    print(f"map coords: {(x + 65 + tf.translation.x)}, {(y - 130 + tf.translation.y)}")
+    # print(f"map coords: {(x + 65 + tf.translation.x)}, {(y - 130 + tf.translation.y)}")
     col = int((x + 65 - ox + tf.translation.x)/res)
     row = int((y - 130 - oy + tf.translation.y)/res)
-    print(row, col)
+    # print(row, col)
     return row, col
