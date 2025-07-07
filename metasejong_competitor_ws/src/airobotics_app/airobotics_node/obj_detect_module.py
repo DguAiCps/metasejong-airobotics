@@ -3,14 +3,9 @@ from pixel_to_cor import *
 from single_capture import capture_single_image
 from pathlib import Path
 from topic_collect import collect_demo_data
-import math
-import subprocess
-import time
 import os
 from collections import defaultdict
 from ultralytics import YOLO
-import shutil
-import signal
 
 def detect_objects() -> dict[str, list[dict[str, list[float]]]]:
     """

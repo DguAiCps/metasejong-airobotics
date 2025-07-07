@@ -1,19 +1,32 @@
 #!/usr/bin/env python3
-import rclpy
-from rclpy.node import Node
-from nav_msgs.msg import OccupancyGrid
-from geometry_msgs.msg import PoseStamped
-from nav_msgs.msg import Path
-from tf2_msgs.msg import TFMessage
-from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 
 import numpy as np
 import heapq, math
 
+# soft cost 캐싱
+_soft_cost_grid: np.ndarray | None = None
 
-# TODO: 쓰레기 근처로 가면 cost 증가하도록 만들기
+def build_soft_cost_grid(points: list[tuple[int,int]],
+                         grid_shape: tuple[int,int],
+                         sigma: float = 5.0):
+    """
+    points: (row, col) 리스트
+    grid_shape: (rows, cols)
+    sigma: 가우시안 반경
+    """
+    global _soft_cost_grid
+    rows, cols = grid_shape
+    cost = np.zeros((rows, cols), dtype=float)
+    Y, X = np.indices((rows, cols))
+    
+    for (pr, pc) in points:
+        d2 = (Y - pr)**2 + (X - pc)**2
+        cost += np.exp(-d2 / (2 * sigma*sigma))
+
+    _soft_cost_grid = cost / cost.max()
+
 def soft_cost(r: int, c: int) -> float:
-    return 0.0
+    return float(_soft_cost_grid[r, c])
 
 def astar(grid: np.ndarray,
           start: tuple[int, int],
@@ -64,6 +77,7 @@ def astar(grid: np.ndarray,
                 heapq.heappush(open_heap, (tentative + h(nr, nc), nr, nc))
     return None
 
+# TODO: 실제 로봇 시작위치 받아오도록 변경
 def world_to_grid(coords, map, tf):
     x = coords[0]
     y = coords[1]

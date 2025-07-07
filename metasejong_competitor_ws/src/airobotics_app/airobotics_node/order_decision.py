@@ -2,7 +2,6 @@
 # order_decision.py
 
 from typing import List, Dict
-from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 import os, random, numpy as np
 
@@ -11,7 +10,7 @@ from rclpy.node import Node
 from nav_msgs.msg import OccupancyGrid
 from tf2_msgs.msg import TFMessage
 
-from astar import astar, world_to_grid
+from astar import astar, world_to_grid, build_soft_cost_grid
 
 # A* 전역 변수
 _dist_grid_coords = None
@@ -172,6 +171,7 @@ def visit_order(data: List[Dict[str, List[float]]], entry_pos: List[float], exit
     print(f"data: {data}")
     print(f"entry: {entry_pos}")
     print(f"exit: {exit_pos}")
+    
 
     items = [value
              for d in data
@@ -192,6 +192,7 @@ def visit_order(data: List[Dict[str, List[float]]], entry_pos: List[float], exit
         world_to_grid(coords[k], _map_msg, _tf)
         for k in range(n_obj)
     ]
+    build_soft_cost_grid(grid_coords, (_map_msg.info.width, _map_msg.info.height))
     resolution = _map_msg.info.resolution
 
     tasks = [
