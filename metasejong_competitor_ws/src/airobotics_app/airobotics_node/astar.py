@@ -8,7 +8,7 @@ _soft_cost_grid: np.ndarray | None = None
 
 def build_soft_cost_grid(points: list[tuple[int,int]],
                          grid_shape: tuple[int,int],
-                         sigma: float = 5.0):
+                         sigma: float = 10.0):
     """
     points: (row, col) 리스트
     grid_shape: (rows, cols)
@@ -23,15 +23,20 @@ def build_soft_cost_grid(points: list[tuple[int,int]],
         d2 = (Y - pr)**2 + (X - pc)**2
         cost += np.exp(-d2 / (2 * sigma*sigma))
 
-    _soft_cost_grid = cost / cost.max()
+    _soft_cost_grid = cost
+    #plt.matshow(_soft_cost_grid)
+    #plt.show()
 
 def soft_cost(r: int, c: int) -> float:
-    return float(_soft_cost_grid[r, c])
+    #return float(_soft_cost_grid[r, c])
+    return 0
 
 def astar(grid: np.ndarray,
           start: tuple[int, int],
           goal: tuple[int, int],
-          soft_cost_func=soft_cost) -> list[tuple[int, int]] | None:
+          soft_cost_func=soft_cost) -> float | None:
+    return np.hypot(goal[0] - start[0], goal[1] - start[1])
+    """
     # print("a star 알고리즘 시작")
     rows, cols = grid.shape
     directions = [(-1,  0, 1.0), (1, 0, 1.0), (0, -1, 1.0), (0, 1, 1.0),
@@ -57,11 +62,7 @@ def astar(grid: np.ndarray,
         if closed[r, c]:
             continue
         if (r, c) == goal:
-            path = [(r, c)]
-            while parent[r, c][0] != -1:
-                r, c = parent[r, c]
-                path.append((r, c))
-            return path[::-1]
+            return f
 
         closed[r, c] = True
         for dr, dc, cost in directions:
@@ -75,8 +76,9 @@ def astar(grid: np.ndarray,
                 g_score[nr, nc] = tentative
                 parent[nr, nc] = (r, c)
                 heapq.heappush(open_heap, (tentative + h(nr, nc), nr, nc))
-    return None
 
+    return None
+"""
 # TODO: 실제 로봇 시작위치 받아오도록 변경
 def world_to_grid(coords, map, tf):
     x = coords[0]

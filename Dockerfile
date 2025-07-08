@@ -1,5 +1,12 @@
 FROM ros:humble
 
+RUN rm -f /etc/apt/sources.list.d/ros*.list
+RUN apt-get update && apt-get install -y curl gnupg2 lsb-release
+
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | gpg --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg
+
+RUN echo "deb [signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu jammy main" > /etc/apt/sources.list.d/ros2.list
+
 # Install basic tools and Python virtual environment
 RUN apt-get update && apt-get install -y \
     python3-pip \
@@ -38,12 +45,20 @@ COPY metasejong_competitor_ws/src/airobotics_app /workspace/src/airobotics_app
 # Install ROS2 dependencies
 RUN . /opt/ros/humble/setup.sh && \
     rosdep update && \
-    rosdep install --from-paths /workspace/src --ignore-src -y
+    rosdep install --from-paths /workspace/src --ignore-src -y && \
+    apt update && \
+    apt install -y ros-humble-rmw-cyclonedds-cpp
 
 # Build the workspace
 RUN . /opt/ros/humble/setup.sh && \
     cd /workspace && \
     colcon build --symlink-install --packages-select airobotics_app
+
+RUN pip install scikit-learn
+RUN pip install cv_bridge
+RUN pip install ultralytics
+RUN pip install numpy==1.24.3
+RUN pip install scipy==1.11.4
 
 # Set up entrypoint
 COPY entrypoint.sh /entrypoint.sh

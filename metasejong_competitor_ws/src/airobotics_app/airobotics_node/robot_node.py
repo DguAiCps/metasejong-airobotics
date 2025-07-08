@@ -14,10 +14,14 @@ from typing import Optional, Dict, Any, List
 from geometry_msgs.msg import Twist, Pose, Point, Quaternion
 from std_msgs.msg import String, Float32, Bool
 from sensor_msgs.msg import JointState
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry, OccupancyGrid
 from dataclasses import dataclass
 import math
 import time
+import numpy as np
+from sensor_msgs.msg import Image as ROSImage
+from sensor_msgs.msg import CameraInfo
+from cv_bridge import CvBridge
 
 @dataclass
 class ManipulatorCommander:
@@ -172,13 +176,18 @@ class RobotNode(Node):
             history=HistoryPolicy.KEEP_LAST,
             depth=10
         )
-
+        self.start_position = [0.0, 0.0, 0.0]
         self.robot_position = [0.0, 0.0, 0.0]
         self.robot_orientation = [0.0, 0.0, 0.0, 0.0]
         
+        self.map_data = None
+        self.map_array = None
+        self.map_resolution = None
+        self.map_origin = None
+
         # Node가 완전히 초기화될 때까지 대기
         time.sleep(1)
-
+        self.bridge = CvBridge()
         # Initialize subscribers
         self._init_subscribers()
         
@@ -235,6 +244,55 @@ class RobotNode(Node):
             self.odom_qos_profile
         )
         
+        # 맵 구독 추가
+        self.map_sub = self.create_subscription(
+            OccupancyGrid,
+            '/metasejong2025/map',
+            self._map_callback,
+            10
+        )
+################################################
+        self.rgb_image = None
+        self.depth_image = None
+        self.camera_info = None
+
+        self.create_subscription(
+            ROSImage,
+            '/metasejong2025/robot/center_camera_image',
+            self._rgb_callback,
+            10
+        )
+        self.create_subscription(
+            ROSImage,
+            '/metasejong2025/robot/center_camera_depth',
+            self._depth_callback,
+            10
+        )
+        self.create_subscription(
+            CameraInfo,
+            '/metasejong2025/robot/center_camera_info',
+            self._camera_info_callback,
+            10
+        )
+     #########################################   
+    def _rgb_callback(self, msg: ROSImage) -> None:
+        try:
+            self.rgb_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        except Exception as e:
+            self.logger.error(f"Error converting RGB image: {str(e)}")
+
+    def _depth_callback(self, msg: ROSImage) -> None:
+        try:
+            self.depth_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
+        except Exception as e:
+            self.logger.error(f"Error converting depth image: {str(e)}")
+
+    def _camera_info_callback(self, msg: CameraInfo) -> None:
+        try:
+            self.camera_info = msg
+        except Exception as e:
+            self.logger.error(f"Error processing camera info: {str(e)}")
+    ####################################################################        
     #   Callback function for processing robot position information
     def _odom_callback(self, msg: Odometry) -> None:
         """Callback function for processing robot position information"""
@@ -246,6 +304,36 @@ class RobotNode(Node):
             self.logger.error(f"Error while processing /odom message: {str(e)}")
             raise  
      
+    def _map_callback(self, msg: OccupancyGrid) -> None:
+        """
+        Callback function for processing map information
+        """
+        try:
+            self.map_data = msg
+            width = msg.info.width
+            height = msg.info.height
+            self.map_resolution = msg.info.resolution
+            self.map_origin = [msg.info.origin.position.x, msg.info.origin.position.y]
+            arr = np.array(msg.data, dtype=np.int8).reshape((height, width))
+            # 로봇 크기(1m x 1m) buffer 적용
+            arr = self.inflate_obstacles(arr, robot_radius=0.5)
+            self.map_array = arr
+        except Exception as e:
+            self.logger.error(f"Error while processing /map message: {str(e)}")
+    
+    def inflate_obstacles(self, map_array, robot_radius=0.5):
+        """
+        장애물 주변에 로봇 반경만큼 buffer zone 생성
+        """
+        try:
+            from scipy.ndimage import grey_dilation
+            cell_radius = int(robot_radius / self.map_resolution)
+            structure = np.ones((2*cell_radius+1, 2*cell_radius+1))
+            inflated = grey_dilation((map_array >= 50).astype(np.uint8), footprint=structure)
+            return np.where(inflated > 0, 100, map_array)
+        except Exception as e:
+            self.logger.error(f"Error in inflate_obstacles: {str(e)}")
+            return map_array
 
     #   Publish robot movement command
     def move_robot(self, velocity: MobileBaseCommander) -> None:
@@ -293,5 +381,4 @@ class RobotNode(Node):
         Get the robot orientation
         """
         return self.robot_orientation
-    
-    
+

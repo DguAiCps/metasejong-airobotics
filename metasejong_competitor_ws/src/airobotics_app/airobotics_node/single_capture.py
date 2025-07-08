@@ -32,14 +32,26 @@ class SingleImageSaver(Node):
 
 def capture_single_image(topic_name, output_filename='captured.jpg'):
     """Capture a single image from ROS2 topic and save it"""
-    rclpy.init()
+    try:
+        # 노드 생성 시도
+        node = SingleImageSaver(topic_name, output_filename)
+    except rclpy.exceptions.NotInitializedException:
+        # 초기화되지 않은 경우 초기화 후 재시도
+        rclpy.init()
+        node = SingleImageSaver(topic_name, output_filename)
+    
+    # 이미지가 저장될 때까지 대기
+    while not node.saved and rclpy.ok() and not node.is_timeout():
+        rclpy.spin_once(node, timeout_sec=0.1)
+    
+    node.destroy_node()
+"""
     node = SingleImageSaver(topic_name, output_filename)
-
+    rclpy.init()
     # Spin until image is saved
     while not node.saved and rclpy.ok() and not node.is_timeout():
         rclpy.spin_once(node, timeout_sec=0.1)
-
-    rclpy.shutdown()
+"""
 
 # Usage example
 if __name__ == '__main__':
