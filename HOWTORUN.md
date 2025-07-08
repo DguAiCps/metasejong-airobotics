@@ -2,15 +2,19 @@ Team name
 
 DguAiCps
 
+
 Installation instructions
 
 make build and make run
+
 
 Usage examples
 
 make run
 
+
 List of dependencies
+
 scikit-learn
 cv_bridge
 ultralytics
@@ -36,5 +40,7 @@ std_msgs
 Environment setup guide
 
 make build
+
+
 
 Troubleshooting instructions
