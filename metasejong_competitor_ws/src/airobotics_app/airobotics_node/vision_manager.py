@@ -5,12 +5,55 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 from sklearn.decomposition import PCA
 from .robot_node import MobileBaseCommander
+from pathlib import Path
+import cv2
+import torch
+from .mlp_model import ResidualMLP
+
 class VisionManager:
-    def __init__(self, robot_node, yolo_model, logger):
+    def __init__(self, robot_node, yolo_model, logger, *, collect_mode: bool = False, save_dir: str = "./data"):
         self.robot_node = robot_node
         self.yolo_model = yolo_model
         self.logger = logger
         self.camera_offset_robot_frame = np.array([-0.047, 0.0, -0.617])
+        self.collect_mode = collect_mode
+        self.save_dir = Path(save_dir)
+        if self.collect_mode:
+            self.save_dir.mkdir(parents=True, exist_ok=True)
+        # === MLP 로드 ===
+        model_path = Path(__file__).resolve().parent / ".." / "resource" / "mlp_model.pth"
+        self.mlp_model = ResidualMLP()
+        self.mlp_model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+        self.mlp_model.eval()
+        self.logger.info(f"[MLP 보정 모델 로딩 성공]: {model_path}")
+
+    def _save_sample(self, bbox, depth_arr, estimated_pos, gt_pos):
+        import json, numpy as np, datetime as dt
+
+        idx = len(list(self.save_dir.glob("metadata_*.json")))
+        depth_path = self.save_dir / f"depth_image_{idx:05d}.npy"
+        meta_path  = self.save_dir / f"metadata_{idx:05d}.json"
+        rgb_path = self.save_dir / f"rgb_image_{idx:05d}.png"
+
+        np.save(depth_path, depth_arr)
+        bgr_image = cv2.cvtColor(self.robot_node.rgb_image, cv2.COLOR_RGB2BGR)
+        cv2.imwrite(str(rgb_path), bgr_image)
+        metadata = {
+            "bounding_box": list(map(int, bbox)),
+            "pixel_center": [ (bbox[0]+bbox[2])//2, (bbox[1]+bbox[3])//2 ],
+            "camera_intrinsics": { "K": self.robot_node.camera_info.k.reshape(3,3).tolist() },
+            "robot_pose": {
+                "position": self.robot_node.get_robot_position(),
+                "orientation_quat": self.robot_node.get_robot_orientation(),
+            },
+            "estimated_position": estimated_pos,
+            "ground_truth_position": gt_pos,
+            "timestamp": dt.datetime.now().isoformat(),
+        }
+        with open(meta_path, "w") as f:
+            json.dump(metadata, f, indent=2)
+
+        self.logger.info(f"✅ 샘플 저장 → {meta_path.name}, {depth_path.name}")
 
     def get_object_pose(self, object_detection: dict) -> dict:
         """
@@ -102,16 +145,32 @@ class VisionManager:
         y_axis /= np.linalg.norm(y_axis)
         x_axis = np.cross(y_axis, z_axis)
         x_axis /= np.linalg.norm(x_axis)
-    
+
         rot_obj = R.from_matrix(np.column_stack((x_axis, y_axis, z_axis)))
         object_quat_world = (rot_robot * rot_obj).as_quat()
         self.logger.info(f"[이게 로봇기준 쿼터니언 월드 아님 이름만 월드]: {object_quat_world.tolist()}")
-        return {
+        result = {
             "position": best_pos_world.tolist(),
             "quaternion": object_quat_world.tolist(),
             "closest_box": list(closest_box)
         }
 
+        # [추가] 수집 모드일 경우 Ground Truth 입력 받고 저장
+        if self.collect_mode:
+            self.logger.info("📝 G.T. 월드 좌표(x y z)를 입력하세요 (예: -64.2 132.8 0.05):")
+            try:
+                #t = list(map(float, input("GT > ").strip().split()))
+                gt =[0.0, 0.0, 0.0]
+                self._save_sample(closest_box, depth,best_pos_world.tolist(), gt)
+            except Exception as e:
+                self.logger.error(f"GT 입력 실패: {e}")
+        if self.mlp_model:
+                mlp_input = torch.tensor([[u_center, v_center, best_pos_world[0], best_pos_world[1]]], dtype=torch.float32)
+                correction = self.mlp_model(mlp_input).detach().numpy().flatten()
+                result["position"] = (best_pos_world + correction).tolist()
+                self.logger.info(f"[MLP 보정 결과] x={correction[0]:.3f}, y={correction[1]:.3f}")
+
+        return result
     def compute_grasp_quaternion(self, object_quat_world: list, angle_offset_deg: float = 90.0) -> list:
         """
         물체의 회전 쿼터니언(object_quat_world)을 기반으로
@@ -205,4 +264,4 @@ class VisionManager:
 
         self.robot_node.move_robot(MobileBaseCommander(0.0, 0.0))  # 정지
 
-    
+

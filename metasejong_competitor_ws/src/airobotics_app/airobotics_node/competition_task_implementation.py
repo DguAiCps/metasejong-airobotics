@@ -1,37 +1,19 @@
-# === task_implementation.py ===
-
 import time
-print("i")
 import numpy as np
-print("i")
 import os
-print("i")
 import yaml
-print("i")
 from . import astar
-print("i")
 from . import order_decision
-print("i")
 from pathlib import Path
-print("i")
 from typing import Dict, List
-print("i")
 from ultralytics import YOLO
-print("i")
 from .competition_task_base import CompetitionTask
-print("i")
 from .robot_node import RobotNode, MobileBaseCommander
-print("i")
 from .vision_manager import VisionManager
-print("i")
 from .manipulation_manager import ManipulationManager
-print("i")
 from .mpc_controller import MPCController
-print("i")
 from .path_generator import generate_final_path_with_frontal_pickup
-print("i")
 from .order_decision import genetic_algorithm
-print("i")
 from .util import quaternion_to_yaw, normalize_angle
 from .obj_detect_mlp import *
 from scipy.spatial.transform import Rotation as R
@@ -44,7 +26,7 @@ class TaskImplementation(CompetitionTask):
         self.robot_node = robot_node
         model_root = Path(__file__).resolve().parent
 
-        
+
         self.yolo_model = YOLO(model_root / ".." / "resource" / "final.pt")
         self.logger.info("YOLOv8 모델 로딩 완료 (final.pt)")
 
@@ -53,7 +35,7 @@ class TaskImplementation(CompetitionTask):
         self.answer_sheet = self.load_yaml_to_dict(answer_sheet_file_path)
         self.robot_node.start_position = self.answer_sheet['start_position']
 
-        self.vision_manager = VisionManager(self.robot_node, self.yolo_model, self.logger)
+        self.vision_manager = VisionManager(self.robot_node, self.yolo_model, self.logger, collect_mode=False)
         self.manip_manager = ManipulationManager(self.robot_node, self.logger)
         self.mpc = MPCController()
 
@@ -155,10 +137,10 @@ class TaskImplementation(CompetitionTask):
                 for j, obj in enumerate(recyclable_objects):
                     if j != object_order[i]:
                         if obj['position'][:2] not in collected_positions:
-                            obstacles.append({'center': np.array(obj['position'][:2]), 'radius': 0.2})
+                            obstacles.append({'center': np.array(obj['position'][:2]), 'radius': 0.05})
                 for obj in self.object_detection_result:
                     if not obj['recyclable']:
-                        obstacles.append({'center': np.array(obj['position'][:2]), 'radius': 0.2})
+                        obstacles.append({'center': np.array(obj['position'][:2]), 'radius': 0.05})
 
                 v, w = self.mpc.solve(x0, goal, obstacles=[o['center'] for o in obstacles])
                 self.robot_node.move_robot(MobileBaseCommander(linear_x=v, angular_z=w))
@@ -175,7 +157,7 @@ class TaskImplementation(CompetitionTask):
 
             self.robot_node.move_robot(MobileBaseCommander(0.0, 0.0))
             self.logger.info(f"[Stage2] #{i+1} 수거 위치 도달 완료")
-            
+
 
             obj = recyclable_objects[object_order[i]]
             obj_dict = {
@@ -186,8 +168,9 @@ class TaskImplementation(CompetitionTask):
             }
             self.vision_manager.center_align(obj_dict)
             vision_result = self.vision_manager.get_object_pose(obj_dict)
-            gripper_quat = self.vision_manager.compute_grasp_quaternion(vision_result['quaternion'])
-            self.manip_manager.pick_object(obj_dict, np.array(vision_result['position']), gripper_quat, vision_result.get('closest_box'))
+            if vision_result['position'][0]!= 0 and vision_result['position'][1]!= 0 and vision_result['position'][2]!= 0:
+                gripper_quat = self.vision_manager.compute_grasp_quaternion(vision_result['quaternion'])
+                self.manip_manager.pick_object(obj_dict, np.array(vision_result['position']), gripper_quat, vision_result.get('closest_box'))
 
             collected_positions.append(obj['position'][:2])
             time.sleep(2)
