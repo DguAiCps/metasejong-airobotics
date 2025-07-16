@@ -158,6 +158,7 @@ def detect_objects(use_mlp=True, mlp_model_path='mlp_model_multi.pth') -> list[d
     if use_mlp:
         # Load MLP model
         try:
+            mlp_model_path = Path(__file__).resolve().parent / ".." / "resource" / "mlp_model_multi.pth"
             mlp_model = ResidualMLP(input_size=4, output_size=3)
             mlp_model.load_state_dict(torch.load(mlp_model_path))
             mlp_model.eval()
