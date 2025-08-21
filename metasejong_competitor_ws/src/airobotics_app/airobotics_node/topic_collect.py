@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
+import os
 from tf2_msgs.msg import TFMessage
 
 class DemoTFExtractor(Node):
@@ -90,6 +91,7 @@ class DemoTFExtractor(Node):
             print(f"Principal Point: cx={k_matrix[2]:.2f}, cy={k_matrix[5]:.2f}")
     
     def collect_data(self):
+        scenario_id = os.getenv("ENV_METASEJONG_SCENARIO", "demo")
         # Subscribe to /tf topic
         self.tf_subscription = self.create_subscription(
             TFMessage,
@@ -102,7 +104,7 @@ class DemoTFExtractor(Node):
         from sensor_msgs.msg import CameraInfo
         self.camera_subscription = self.create_subscription(
             CameraInfo,
-            '/metasejong2025/cameras/demo_1/camera_info',
+            f'/metasejong2025/cameras/{scenario_id}_1/camera_info',
             self.camera_info_callback,
             10
         )
@@ -130,9 +132,9 @@ def collect_demo_data():
     """
     if not rclpy.ok():
         rclpy.init()
-    
+    scenario_id = os.getenv("ENV_METASEJONG_SCENARIO", "demo")
     # Specify which demo frames to collect
-    target_frames = ['demo_1', 'demo_2']
+    target_frames = [f'{scenario_id}_1', f'{scenario_id}_2']
     
     extractor = DemoTFExtractor(target_frames)
     

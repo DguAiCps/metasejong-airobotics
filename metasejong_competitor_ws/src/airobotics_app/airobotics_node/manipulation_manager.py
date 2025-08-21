@@ -58,6 +58,7 @@ class ManipulationManager:
         self.robot_node.pick_up_object(pick_and_place_command)
 
         # 검증 및 로그
+        self.logger.info(f"[검증] 목표 쓰레기: {object_detection['class_name']}")
         self.logger.info(f"[검증] 실제 쓰레기 위치 (정답지): {object_detection['position']}")
         self.logger.info(f"[검증] 실제 쓰레기 회전 (정답지): {object_detection['rotation']}")
 
@@ -79,4 +80,4 @@ class ManipulationManager:
                 else:
                     self.logger.info(f"[검증] bbox corner {i+1}: (u={u}, v={v}) → 범위 초과")
 
-        time.sleep(20)
+        time.sleep(10)

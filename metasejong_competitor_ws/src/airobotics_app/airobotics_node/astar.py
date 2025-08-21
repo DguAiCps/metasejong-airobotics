@@ -28,15 +28,14 @@ def build_soft_cost_grid(points: list[tuple[int,int]],
     #plt.show()
 
 def soft_cost(r: int, c: int) -> float:
-    #return float(_soft_cost_grid[r, c])
-    return 0
+    return float(_soft_cost_grid[r, c])
 
 def astar(grid: np.ndarray,
           start: tuple[int, int],
           goal: tuple[int, int],
           soft_cost_func=soft_cost) -> float | None:
-    return np.hypot(goal[0] - start[0], goal[1] - start[1])
-    """
+    #return np.hypot(goal[0] - start[0], goal[1] - start[1])
+    
     # print("a star 알고리즘 시작")
     rows, cols = grid.shape
     directions = [(-1,  0, 1.0), (1, 0, 1.0), (0, -1, 1.0), (0, 1, 1.0),
@@ -78,7 +77,7 @@ def astar(grid: np.ndarray,
                 heapq.heappush(open_heap, (tentative + h(nr, nc), nr, nc))
 
     return None
-"""
+
 # TODO: 실제 로봇 시작위치 받아오도록 변경
 def world_to_grid(coords, map, tf):
     x = coords[0]

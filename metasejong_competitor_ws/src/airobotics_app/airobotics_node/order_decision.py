@@ -45,7 +45,7 @@ def _compute_dist(pair):
 
 
 # 유전 알고리즘 파라미터
-population_size = 300
+population_size = 500
 generations = 100
 mutation_rate = 0.1
 alpha = 5.0  # 거리 중요도
@@ -85,7 +85,7 @@ def fitness(chromosome):
         angle_change += np.arccos(
             np.clip(np.dot(v1, v2) /
                     (np.linalg.norm(v1)*np.linalg.norm(v2)), -1.0, 1.0))
-
+    #print(f"Fitness 계산: 거리 = {dist:.3f}, 각도 변화 = {angle_change:.3f}", flush=True)
     return alpha * dist + beta * angle_change
 
 def crossover(parent1, parent2):
@@ -148,9 +148,6 @@ def genetic_algorithm(worker_num, min_delta = 1e-6, patience = 20):
 
         population = new_population
 
-        # if generation % 10 == 0:
-            # print(f"Generation {generation}: Best Fitness = {best_fitness:.3f}")
-
     print(f"\nWorker #{worker_num}: 최적 오브젝트 방문 순서: {best_chromosome}")
     print(f"Worker #{worker_num}: 최종 Fitness 값 (거리+각도): {best_fitness:.3f}")
 
@@ -172,10 +169,12 @@ def init_worker(coords, dmat, end_idx):
 
 
 def visit_order(data, entry_pos: List[float], exit_pos: None|List[float] = None):
+    start_time = time.time()
+
     print("visit_order 호출")
     print(f"data: {data}")
     print(f"entry: {entry_pos}")
-    print(f"exit: {exit_pos}")
+    print(f"exit: {exit_pos}", flush=True)
     
 
     items = [item['position'] for item in data]
@@ -191,40 +190,32 @@ def visit_order(data, entry_pos: List[float], exit_pos: None|List[float] = None)
     
     n_obj  = coords.shape[0]
 
-    print("p")
     # A*로 채운 거리 행렬
+    print("A* 거리 행렬 계산 시작")
     grid_coords = [
         world_to_grid(coords[k], _map_msg, _tf)
         for k in range(n_obj)
     ]
-    #build_soft_cost_grid(grid_coords, (_map_msg.info.width, _map_msg.info.height))
+    build_soft_cost_grid(grid_coords, (_map_msg.info.width, _map_msg.info.height))
     resolution = _map_msg.info.resolution
-    print("p")
     tasks = [
         (i, j)
         for i in range(n_obj)
         for j in range(n_obj)
         if i != j
     ]
-    print("p")
     dmat = np.zeros((n_obj, n_obj), dtype=float)
-    """RESTARTS = (os.cpu_count() or 8) // 2
+    RESTARTS = (os.cpu_count() or 8) // 2
     with ProcessPoolExecutor(
         max_workers=RESTARTS,
         initializer=_init_dist_worker,
         initargs=((grid_coords, resolution),)
     ) as pool:
         for i, j, dist in pool.map(_compute_dist, tasks):
-            dmat[i, j] = dist"""
-    for i in range(n_obj):
-        for j in range(n_obj):
-            if i == j:
-                dmat[i, j] = 0.0
-            else:
-                dmat[i, j] = np.linalg.norm(coords[i] - coords[j])
+            dmat[i, j] = dist
 
     # 병렬 GA
-    """print("병렬 GA 시작")
+    print("병렬 GA 시작")
     RESTARTS = (os.cpu_count() or 8) // 2
     print(f"방문 노드 개수: {n_obj}")
     print(f"병렬 스레드 개수: {RESTARTS}")
@@ -232,15 +223,14 @@ def visit_order(data, entry_pos: List[float], exit_pos: None|List[float] = None)
                              initializer=init_worker,
                              initargs=(coords, dmat, END)) as pool:
         bests = list(pool.map(genetic_algorithm, range(RESTARTS)))
-    """
+    
     init_worker(coords, dmat, END)
-    bests = genetic_algorithm(0, min_delta=1e-6, patience=20)
 
     
-    #order, fit = min(bests, key=lambda x: x[1])
-    order, fit = bests
+    order, fit = min(bests, key=lambda x: x[1])
     print(f"\n최적 오브젝트 방문 순서: {order}")
     print(f"최종 Fitness 값 (거리+각도): {fit:.3f}")
+    print(f"visit_order 실행 시간: {time.time() - start_time:.3f}초", flush=True)
 
     result = [
         data[i-1]
@@ -283,7 +273,7 @@ class _MapTfListener(Node):
             # 1D data → 2D grid (0=free, 1=occupied)
             w, h = msg.info.width, msg.info.height
             arr  = np.array(msg.data, dtype=int).reshape((h, w))
-            self.grid   = np.zeros((h, w), dtype=int)
+            self.grid   = arr
             self.map_msg = msg
 
     def _tf_cb(self, msg: TFMessage):
@@ -308,7 +298,7 @@ def _get_map_and_tf(timeout: float = 10.0):
         rclpy.spin_once(listener, timeout_sec=0.1)
 
     if listener.map_msg is None:
-        #raise RuntimeError("타임아웃: 맵 데이터를 못 받았습니다.")
+        print("타임아웃: 맵 데이터를 못 받았습니다.", flush=True)
         listener.map_msg = OccupancyGrid() 
         listener.map_msg.info.resolution = 0.05000000074505806
         listener.map_msg.info.width = 3939
@@ -325,7 +315,7 @@ def _get_map_and_tf(timeout: float = 10.0):
         listener.grid   = np.where(arr == 0, 0, 1)
 
     if listener.tf_msg is None:
-        #raise RuntimeError("타임아웃: static TF를 못 받았습니다.")
+        print("타임아웃: static TF를 못 받았습니다.", flush=True)
         transform = Transform()
         transform.translation.x =  21.706649299999995
         transform.translation.y = -29.265589800000015
@@ -337,8 +327,7 @@ def _get_map_and_tf(timeout: float = 10.0):
 
         listener.tf_msg = transform
 
-    map_msg = listener.map_msg
-    tf      = listener.tf_msg
+    _map_msg = listener.map_msg
+    _tf      = listener.tf_msg
     _grid = listener.grid
     #rclpy.shutdown()
-    return map_msg, tf

@@ -141,9 +141,10 @@ def detect_objects(use_mlp=True, mlp_model_path='mlp_model_multi.pth') -> list[d
         list: List of dictionaries containing class_name, position, and recyclable status
     """
     # Capture images from cameras
-    capture_single_image('/metasejong2025/cameras/demo_1/image_raw', '1.jpg')
-    capture_single_image('/metasejong2025/cameras/demo_2/image_raw', '2.jpg')
-    capture_single_image('/metasejong2025/cameras/demo_3/image_raw', '3.jpg')
+    scenario_id = os.getenv("ENV_METASEJONG_SCENARIO", "demo")
+    capture_single_image(f'/metasejong2025/cameras/{scenario_id}_1/image_raw', '1.jpg')
+    capture_single_image(f'/metasejong2025/cameras/{scenario_id}_2/image_raw', '2.jpg')
+    capture_single_image(f'/metasejong2025/cameras/{scenario_id}_3/image_raw', '3.jpg')
     
     q2star = np.array([ 0.5, -0.5,  -0.5,  0.5])
     k, demo1_pos, demo1_rot, demo2_pos, demo2_rot = collect_demo_data()

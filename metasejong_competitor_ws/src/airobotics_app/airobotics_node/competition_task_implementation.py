@@ -75,7 +75,7 @@ class TaskImplementation(CompetitionTask):
 
     def start_stage_2_task(self) -> bool:
         self.logger.info('[Stage2] 시작')
-        order_decision._map_msg, order_decision._tf = order_decision._get_map_and_tf()
+        order_decision._get_map_and_tf()
 
         if not self.object_detection_result:
             self.logger.warn("[Stage2] Stage1 결과 없음")
@@ -115,6 +115,9 @@ class TaskImplementation(CompetitionTask):
         collected_positions = []
 
         for i, ((tx, ty), ttheta) in enumerate(pickup_infos):
+            obj = recyclable_objects[object_order[i]]
+            collected_positions.append(obj['position'][:2])
+            
             if self.force_stop:
                 break
 
@@ -143,6 +146,7 @@ class TaskImplementation(CompetitionTask):
 
                 v, w = self.mpc.solve(x0, goal, obstacles=[o['center'] for o in obstacles])
                 self.robot_node.move_robot(MobileBaseCommander(linear_x=v, angular_z=w))
+                #self.logger.info(f"move, dist: {dist:.2f}, v: {v:.2f}, w: {w:.2f}")
                 time.sleep(0.1)
 
             while True:
@@ -151,6 +155,7 @@ class TaskImplementation(CompetitionTask):
                 if abs(angle_diff) < np.radians(10):
                     break
                 w = float(np.clip(angle_diff, -0.6, 0.6))
+                #self.logger.info(f"rotate, angle_diff: {angle_diff:.2f}, w: {w:.2f}")
                 self.robot_node.move_robot(MobileBaseCommander(0.0, w))
                 time.sleep(0.05)
 
