@@ -15,17 +15,14 @@ class VisionManager:
         self.robot_node = robot_node
         self.yolo_model = yolo_model
         self.logger = logger
-        self.camera_offset_robot_frame = np.array([-0.047, 0.0, -0.617])
+        self.camera_offset_robot_frame = np.array([0.41, -0.01067, 0.09926])
         self.collect_mode = collect_mode
         self.save_dir = Path(save_dir)
         if self.collect_mode:
             self.save_dir.mkdir(parents=True, exist_ok=True)
-        # === MLP 로드 ===
-        model_path = Path(__file__).resolve().parent / ".." / "resource" / "mlp_model.pth"
-        self.mlp_model = ResidualMLP()
-        self.mlp_model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
-        self.mlp_model.eval()
-        self.logger.info(f"[MLP 보정 모델 로딩 성공]: {model_path}")
+        # === MLP 로드 (일단 비활성화) ===
+        self.mlp_model = None
+        self.logger.info("[MLP] 비활성화 - 기하학적 추정만 사용")
 
     def _save_sample(self, bbox, depth_arr, estimated_pos, gt_pos):
         import json, numpy as np, datetime as dt
@@ -103,11 +100,35 @@ class VisionManager:
 
             u_center = int((x1 + x2) / 2)
             v_center = int((y1 + y2) / 2)
-            Xo = (u_center - cx) * z_med / fx
-            Yo = (v_center - cy) * z_med / fy
-            Zo = z_med
+            
+            # 중심점의 실제 depth 사용 (핵심 수정)
+            z_center = depth[v_center, u_center] if (0 <= v_center < depth.shape[0] and 
+                                                    0 <= u_center < depth.shape[1] and 
+                                                    np.isfinite(depth[v_center, u_center]) and 
+                                                    depth[v_center, u_center] > 0.1) else z_med
+            
+            self.logger.info(f"[DEPTH] 픽셀({u_center},{v_center}): 중심점={depth[v_center, u_center]:.3f}m, 박스median={z_med:.3f}m, 사용={z_center:.3f}m")
+            
+            # 1. 픽셀 → 카메라 3D 좌표
+            Xo = (u_center - cx) * z_center / fx
+            Yo = (v_center - cy) * z_center / fy
+            Zo = z_center
+            self.logger.info(f"[좌표변환1] 카메라 3D: X={Xo:.3f}, Y={Yo:.3f}, Z={Zo:.3f}")
+            
+            # 2. 카메라 → 로봇 기준 좌표
             pos_cam_robot = np.array([Zo, -Xo, -Yo]) + self.camera_offset_robot_frame
+            self.logger.info(f"[좌표변환2] 로봇 기준: X={pos_cam_robot[0]:.3f}, Y={pos_cam_robot[1]:.3f}, Z={pos_cam_robot[2]:.3f}")
+            self.logger.info(f"[좌표변환2] 로봇 기준 거리: {np.linalg.norm(pos_cam_robot):.3f}m")
+            
+            # 3. 로봇 기준 → 월드 절대좌표
             pos_world = rot_robot.apply(pos_cam_robot) + robot_pos
+            self.logger.info(f"[좌표변환3] 월드 절대: X={pos_world[0]:.3f}, Y={pos_world[1]:.3f}, Z={pos_world[2]:.3f}")
+            
+            # 4. 검증: 월드 → 다시 상대좌표로 계산한 거리
+            relative_from_world = pos_world - robot_pos
+            distance_from_world = np.linalg.norm(relative_from_world)
+            self.logger.info(f"[좌표변환4] 월드→상대 재계산 거리: {distance_from_world:.3f}m")
+            self.logger.info(f"[오차분석] 직접계산 vs 재계산: {np.linalg.norm(pos_cam_robot):.3f}m vs {distance_from_world:.3f}m (차이: {abs(np.linalg.norm(pos_cam_robot) - distance_from_world):.6f}m)")
 
             dist = np.linalg.norm(pos_world[:2] - target_world_xy)
             if dist < min_dist:
@@ -164,11 +185,15 @@ class VisionManager:
                 self._save_sample(closest_box, depth,best_pos_world.tolist(), gt)
             except Exception as e:
                 self.logger.error(f"GT 입력 실패: {e}")
-        if self.mlp_model:
-                mlp_input = torch.tensor([[u_center, v_center, best_pos_world[0], best_pos_world[1]]], dtype=torch.float32)
-                correction = self.mlp_model(mlp_input).detach().numpy().flatten()
-                result["position"] = (best_pos_world + correction).tolist()
-                self.logger.info(f"[MLP 보정 결과] x={correction[0]:.3f}, y={correction[1]:.3f}")
+        # MLP 보정 비활성화 - 기하학적 추정만 사용
+        # if self.mlp_model:
+        #     mlp_input = torch.tensor([[u_center, v_center, best_pos_world[0], best_pos_world[1]]], dtype=torch.float32)
+        #     correction = self.mlp_model(mlp_input).detach().numpy().flatten()
+        #     result["position"] = (best_pos_world + correction).tolist()
+        #     self.logger.info(f"[MLP 보정 결과] x={correction[0]:.3f}, y={correction[1]:.3f}")
+        
+        # 기하학적 추정값만 사용
+        result["position"] = best_pos_world.tolist()
 
         return result
     def compute_grasp_quaternion(self, object_quat_world: list, angle_offset_deg: float = 90.0) -> list:
@@ -233,8 +258,8 @@ class VisionManager:
             return
 
         # === PID 기반 회전 정렬 ===
-        Kp = 0.003
-        max_speed = 0.4
+        Kp = 0.002
+        max_speed = 0.25
         tol_pixel = 5
 
         while True:
@@ -243,12 +268,28 @@ class VisionManager:
             detections = results[0]
 
             u_center = None
+            best_dist = float('inf')
             for box, cls_id in zip(detections.boxes.xyxy, detections.boxes.cls):
                 if self.yolo_model.names[int(cls_id)] != target_class:
                     continue
                 x1, y1, x2, y2 = map(int, box.int().tolist())
-                u_center = int((x1 + x2) / 2)
-                break  # 가장 처음 찾은 것 사용
+                cx_box = int((x1 + x2) / 2)
+                cy_box = int((y1 + y2) / 2)
+                
+                # depth 확인 및 거리 계산
+                d = depth[cy_box, cx_box]
+                if not np.isfinite(d) or not (0.1 < d < 5.0):
+                    continue
+                    
+                # 목표 위치와의 거리 비교
+                x_cam = (cx_box - cx) * d / fx
+                y_cam = (cy_box - cam_info.k[5]) * d / cam_info.k[4]
+                est_xy = self.robot_node.get_robot_position()[:2] + np.array([x_cam, y_cam])
+                dist = np.linalg.norm(est_xy - target_world_xy)
+                
+                if dist < best_dist:
+                    best_dist = dist
+                    u_center = cx_box
 
             if u_center is None:
                 self.logger.warn("[center_align] 회전 중 객체 사라짐")
@@ -263,5 +304,112 @@ class VisionManager:
             time.sleep(0.05)
 
         self.robot_node.move_robot(MobileBaseCommander(0.0, 0.0))  # 정지
+        
+        # === 거리 조정 단계 추가 ===
+        self.logger.info("[center_align] 회전 완료, 거리 조정 시작")
+        target_distance = 0.8  # 목표 거리 (0.7-0.9m 중간값)
+        distance_tolerance = 0.08  # 거리 허용 오차 (완화)
+        
+        while True:
+            # 현재 거리 측정 (3D 유클리드 거리)
+            rgb = self.robot_node.rgb_image.copy()
+            depth = self.robot_node.depth_image
+            cam_info = self.robot_node.camera_info
+            fx, fy = cam_info.k[0], cam_info.k[4]
+            cx, cy = cam_info.k[2], cam_info.k[5]
+            
+            results = self.yolo_model(rgb)
+            detections = results[0]
+            
+            current_distance = None
+            for box, cls_id in zip(detections.boxes.xyxy, detections.boxes.cls):
+                if self.yolo_model.names[int(cls_id)] != target_class:
+                    continue
+                x1, y1, x2, y2 = map(int, box.int().tolist())
+                cx_box = int((x1 + x2) / 2)
+                cy_box = int((y1 + y2) / 2)
+                
+                # depth 값 추출
+                z = depth[cy_box, cx_box]
+                if not (np.isfinite(z) and z > 0.1):
+                    continue
+                
+                # 3D 카메라 좌표 계산
+                x_cam = (cx_box - cx) * z / fx
+                y_cam = (cy_box - cy) * z / fy
+                z_cam = z
+                
+                # 카메라 → 로봇 좌표계 변환 (카메라 오프셋 고려)
+                pos_cam_robot = np.array([z_cam, -x_cam, -y_cam]) + self.camera_offset_robot_frame
+                
+                # 로봇 중심에서 객체까지의 거리 계산
+                current_distance = np.linalg.norm(pos_cam_robot)
+                break
+            
+            if current_distance is None:
+                self.logger.warn("[center_align] 거리 측정 실패")
+                break
+                
+            distance_error = current_distance - target_distance
+            self.logger.info(f"[center_align] 현재거리: {current_distance:.3f}m, 목표: {target_distance:.3f}m, 오차: {distance_error:.3f}m")
+            
+            if abs(distance_error) <= distance_tolerance:
+                self.logger.info(f"[center_align] 거리 조정 완료: {current_distance:.3f}m")
+                break
+            
+            # 거리 조정 (전진/후진) - 속도 중간값
+            linear_speed = np.clip(distance_error * 0.4, -0.3, 0.3)  # 적당한 속도
+            self.robot_node.move_robot(MobileBaseCommander(linear_x=linear_speed, angular_z=0.0))
+            time.sleep(0.05)
+        
+        self.robot_node.move_robot(MobileBaseCommander(0.0, 0.0))  # 최종 정지
+        
+        # === 재정렬 단계 (거리 조정 후 각도가 틀어졌을 수 있음) ===
+        self.logger.info("[center_align] 거리 조정 완료, 재정렬 시작")
+        
+        while True:
+            rgb = self.robot_node.rgb_image.copy()
+            results = self.yolo_model(rgb)
+            detections = results[0]
+
+            u_center = None
+            best_dist = float('inf')
+            for box, cls_id in zip(detections.boxes.xyxy, detections.boxes.cls):
+                if self.yolo_model.names[int(cls_id)] != target_class:
+                    continue
+                x1, y1, x2, y2 = map(int, box.int().tolist())
+                cx_box = int((x1 + x2) / 2)
+                cy_box = int((y1 + y2) / 2)
+                
+                # depth 확인 및 거리 계산
+                d = depth[cy_box, cx_box]
+                if not np.isfinite(d) or not (0.1 < d < 5.0):
+                    continue
+                    
+                # 목표 위치와의 거리 비교
+                x_cam = (cx_box - cx) * d / fx
+                y_cam = (cy_box - cam_info.k[5]) * d / cam_info.k[4]
+                est_xy = self.robot_node.get_robot_position()[:2] + np.array([x_cam, y_cam])
+                dist = np.linalg.norm(est_xy - target_world_xy)
+                
+                if dist < best_dist:
+                    best_dist = dist
+                    u_center = cx_box
+
+            if u_center is None:
+                self.logger.warn("[center_align] 재정렬 중 객체 사라짐")
+                break
+
+            error = u_center - cx
+            if abs(error) <= tol_pixel:
+                self.logger.info("[center_align] 재정렬 완료")
+                break  # 중심 정렬 완료
+
+            angular_z = np.clip(Kp * error, -max_speed, max_speed)
+            self.robot_node.move_robot(MobileBaseCommander(linear_x=0.0, angular_z=angular_z*(-1)))
+            time.sleep(0.05)
+
+        self.robot_node.move_robot(MobileBaseCommander(0.0, 0.0))  # 최종 정지
+        self.logger.info("[center_align] 회전 및 거리 조정 완료")
 
 

@@ -28,6 +28,7 @@ class TaskImplementation(CompetitionTask):
 
 
         self.yolo_model = YOLO(model_root / ".." / "resource" / "final.pt")
+        self.yolo_model_robot = YOLO(model_root / ".." / "resource" / "final_robot.pt")
         self.logger.info("YOLOv8 모델 로딩 완료 (final.pt)")
 
         scenario_id = os.getenv("ENV_METASEJONG_SCENARIO", "demo")
@@ -35,7 +36,7 @@ class TaskImplementation(CompetitionTask):
         self.answer_sheet = self.load_yaml_to_dict(answer_sheet_file_path)
         self.robot_node.start_position = self.answer_sheet['start_position']
 
-        self.vision_manager = VisionManager(self.robot_node, self.yolo_model, self.logger, collect_mode=False)
+        self.vision_manager = VisionManager(self.robot_node, self.yolo_model_robot, self.logger, collect_mode=False)
         self.manip_manager = ManipulationManager(self.robot_node, self.logger)
         self.mpc = MPCController()
 

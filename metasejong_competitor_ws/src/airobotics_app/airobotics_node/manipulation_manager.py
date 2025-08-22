@@ -33,9 +33,21 @@ class ManipulationManager:
         grasp_rot_matrix = np.column_stack((x_axis, y_axis, z_axis))
         grasp_quat_world = R.from_matrix(grasp_rot_matrix).as_quat()
 
-        relative_pos = object_pos_world - robot_pos_world
-        relative_pos[1]=0##############반드시 수정
-        relative_pos[2] = -0.24
+        # 실제 거리 계산
+        actual_distance = np.linalg.norm(object_pos_world - robot_pos_world)
+        
+        # relative_pos[0]에 거리값, [1]=0, [2]=-0.24
+        relative_pos = np.array([actual_distance-0.06, 0.0, -0.24])
+        
+        # 디버깅: 거리 및 차이 분석
+        distance_to_object = np.linalg.norm(relative_pos)
+        gt_distance = np.linalg.norm(np.array(object_detection['position']) - robot_pos_world)
+        position_error = np.linalg.norm(object_pos_world - np.array(object_detection['position']))
+        
+        self.logger.info(f"[디버깅] 추정-GT 위치 오차: {position_error:.3f}m")
+        self.logger.info(f"[디버깅] 로봇-쓰레기 거리 (추정): {distance_to_object:.3f}m")
+        self.logger.info(f"[디버깅] 로봇-쓰레기 거리 (GT): {gt_distance:.3f}m")
+        self.logger.info(f"[디버깅] 로봇팔 작업범위 (0.7~0.9m): {'OK' if 0.7 <= distance_to_object <= 0.9 else 'NG'}")
 
         #relative_quat = (R.from_quat(grasp_quat_world) * rot_robot.inv()).as_quat()
         relative_quat = object_quat_world
@@ -80,4 +92,4 @@ class ManipulationManager:
                 else:
                     self.logger.info(f"[검증] bbox corner {i+1}: (u={u}, v={v}) → 범위 초과")
 
-        time.sleep(10)
+        time.sleep(50)
