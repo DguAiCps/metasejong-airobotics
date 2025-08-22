@@ -198,12 +198,14 @@ def visit_order(data, entry_pos: List[float], exit_pos: None|List[float] = None)
     ]
     build_soft_cost_grid(grid_coords, (_map_msg.info.width, _map_msg.info.height))
     resolution = _map_msg.info.resolution
+    
+    # i < j인 경우만 계산 (대칭이므로)
     tasks = [
         (i, j)
         for i in range(n_obj)
-        for j in range(n_obj)
-        if i != j
+        for j in range(i + 1, n_obj) 
     ]
+    
     dmat = np.zeros((n_obj, n_obj), dtype=float)
     RESTARTS = (os.cpu_count() or 8) // 2
     with ProcessPoolExecutor(
@@ -213,6 +215,7 @@ def visit_order(data, entry_pos: List[float], exit_pos: None|List[float] = None)
     ) as pool:
         for i, j, dist in pool.map(_compute_dist, tasks):
             dmat[i, j] = dist
+            dmat[j, i] = dist
 
     # 병렬 GA
     print("병렬 GA 시작")

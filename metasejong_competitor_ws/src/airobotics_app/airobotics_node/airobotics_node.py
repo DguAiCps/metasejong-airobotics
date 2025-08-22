@@ -65,21 +65,16 @@ class AiroboticsNode(Node):
 # Main function
 ###############################################################################
 def main(args=None):
-    print("m")
     rclpy.init(args=args)
-    print("m")
     # Create AiroboticsNode instance
     airobotics_node = AiroboticsNode()
-    print("m")
     # Create RobotNode instance
     # RobotNode is the main node for the robot status .
     robot_node = RobotNode()
-    print("m")
     # Create TaskImplementation instance
     # TaskImplementation is the main node for the competition protocol implementation.
     # This node shows an example of how to implement the competition protocol.
     task_impl = TaskImplementation(airobotics_node.team_name, airobotics_node.team_token, airobotics_node.target_stage, robot_node)
-    print("m")
     try:
         # Create MultiThreadedExecutor
         # MultiThreadedExecutor is the main node for the competition protocol implementation.
