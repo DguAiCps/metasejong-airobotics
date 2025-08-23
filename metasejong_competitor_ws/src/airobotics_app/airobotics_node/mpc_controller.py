@@ -4,7 +4,7 @@ import numpy as np
 import scipy.optimize
 
 class MPCController:
-    def __init__(self, dt=0.2, N=7, v_min=-2.0, v_max=2.0, w_min=-1.0, w_max=1.0, min_obs_dist=0.7):
+    def __init__(self, dt=0.2, N=7, v_min=-2.0, v_max=2.0, w_min=-1.0, w_max=1.0, min_obs_dist=0.05):
         self.dt = dt
         self.N = N
         self.v_min = v_min
@@ -20,7 +20,7 @@ class MPCController:
         for k in range(self.N):
             v, w = u[k]
             x = x + self.dt * np.array([v*np.cos(x[2]), v*np.sin(x[2]), w])
-            total += 10 * np.sum((x[:2] - goal[:2])**2) + 0.1 * (v**2 + w**2)
+            total += 50 * np.sum((x[:2] - goal[:2])**2) + 0.1 * (v**2 + w**2)
             if k > 0:
                 total += 0.5 * ((u[k][0] - u[k-1][0])**2 + (u[k][1] - u[k-1][1])**2)
         total += 10 * ((x[2] - goal[2])**2)

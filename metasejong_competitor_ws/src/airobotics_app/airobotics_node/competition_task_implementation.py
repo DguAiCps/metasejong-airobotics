@@ -63,7 +63,8 @@ class TaskImplementation(CompetitionTask):
         time.sleep(5)
         centers = detect_objects(use_mlp=True)
 
-        self.object_detection_result = centers #self.answer_sheet['mission_objects']
+        #self.object_detection_result = centers
+        self.object_detection_result = self.answer_sheet['mission_objects']
         for object_detection in centers:
             if object_detection['recyclable'] == True:
                 stage1_answer.append({
@@ -88,7 +89,7 @@ class TaskImplementation(CompetitionTask):
             return False
 
         trash_positions = np.array([obj['position'][:2] for obj in recyclable_objects])
-        obstacle_list = [{'center': np.array(obj['position'][:2]), 'radius': 0.2} for obj in self.object_detection_result]
+        obstacle_list = [{'center': np.array(obj['position'][:2]), 'radius': 0.4} for obj in self.object_detection_result]
 
         # visit_order 함수 호출, 밑에 함수도 수정해야함
         astar.build_soft_cost_grid(
@@ -117,7 +118,7 @@ class TaskImplementation(CompetitionTask):
 
         for i, ((tx, ty), ttheta) in enumerate(pickup_infos):
             obj = recyclable_objects[object_order[i]]
-            collected_positions.append(obj['position'][:2])
+            # collected_positions.append(obj['position'][:2])  # 집기 전 추가 제거
             
             if self.force_stop:
                 break
@@ -177,7 +178,9 @@ class TaskImplementation(CompetitionTask):
                 gripper_quat = self.vision_manager.compute_grasp_quaternion(vision_result['quaternion'])
                 self.manip_manager.pick_object(obj_dict, np.array(vision_result['position']), gripper_quat, vision_result.get('closest_box'))
 
+            # 쓰레기 집기 완료 후 collected_positions에 추가
             collected_positions.append(obj['position'][:2])
+            self.logger.info(f"[Stage2] 수집 완료: {obj['class_name']}, 총 {len(collected_positions)}개 수집")
             time.sleep(2)
 
     def stop_task_and_quit(self):

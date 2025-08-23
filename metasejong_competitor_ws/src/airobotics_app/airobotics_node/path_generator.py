@@ -56,7 +56,7 @@ def generate_final_path_with_frontal_pickup(trash_positions, obstacles, start_po
     for t_i in trash_positions:
         direction = t_i - cur_pos
         direction /= (np.linalg.norm(direction) + 1e-6)
-        pickup_point = t_i - direction * 0.9
+        pickup_point = t_i - direction * 0.8
         goal_heading = get_heading(pickup_point, t_i)
         arc = generate_arc_path(cur_pos, pickup_point, steps=20, force_final_heading=goal_heading)
 

@@ -64,7 +64,7 @@ class ManipulationManager:
             start_target_orientation_quat=relative_quat,
             start_target_position=relative_pos.tolist(),
             end_target_orientation_quat=[1, 0, 0, 0],
-            end_target_position=[0.5, drop_position, -0.1]
+            end_target_position=[0.53, drop_position, -0.2]
         )
 
         self.robot_node.pick_up_object(pick_and_place_command)

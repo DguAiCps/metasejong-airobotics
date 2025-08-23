@@ -130,7 +130,11 @@ class VisionManager:
             self.logger.info(f"[좌표변환4] 월드→상대 재계산 거리: {distance_from_world:.3f}m")
             self.logger.info(f"[오차분석] 직접계산 vs 재계산: {np.linalg.norm(pos_cam_robot):.3f}m vs {distance_from_world:.3f}m (차이: {abs(np.linalg.norm(pos_cam_robot) - distance_from_world):.6f}m)")
 
-            dist = np.linalg.norm(pos_world[:2] - target_world_xy)
+            # 기존: GT 위치 기준 선택
+            # dist = np.linalg.norm(pos_world[:2] - target_world_xy)
+            
+            # 수정: 로봇 위치 기준으로 가장 가까운 것 선택
+            dist = np.linalg.norm(pos_world[:2] - robot_pos[:2])
             if dist < min_dist:
                 min_dist = dist
                 closest_box = (x1, y1, x2, y2)
@@ -157,9 +161,21 @@ class VisionManager:
             return {"position": best_pos_world.tolist(), "quaternion": [0,0,0,1]}
 
         pts = np.vstack(points_3d)
-        pca = PCA(n_components=3)
-        pca.fit(pts)
-        principal_axis = pca.components_[0]
+        
+        # 기존 3D PCA 방식 (주석처리하지 않고 보존)
+        pca_3d = PCA(n_components=3)
+        pca_3d.fit(pts)
+        principal_axis_3d = pca_3d.components_[0]
+        
+        # 새로운 2D PCA 방식 (탑뷰 투영) - 높이 차이 보정
+        pts_2d = pts[:, :2]  # x, y만 사용 (z축 제거)
+        pca_2d = PCA(n_components=2)
+        pca_2d.fit(pts_2d)
+        principal_2d = pca_2d.components_[0]  # [x, y]
+        principal_axis_2d = np.array([principal_2d[0], principal_2d[1], 0])  # [x, y, 0]
+        
+        # 현재는 2D 방식 사용 (필요시 3D로 전환 가능)
+        principal_axis = principal_axis_2d
         x_axis = principal_axis / np.linalg.norm(principal_axis)
         z_axis = np.array([0, 0, 1])
         y_axis = np.cross(z_axis, x_axis)
@@ -259,7 +275,7 @@ class VisionManager:
 
         # === PID 기반 회전 정렬 ===
         Kp = 0.002
-        max_speed = 0.25
+        max_speed = 0.5  # 기존 0.25 → 0.5로 증가 (회전속도)
         tol_pixel = 5
 
         while True:
@@ -358,7 +374,7 @@ class VisionManager:
                 break
             
             # 거리 조정 (전진/후진) - 속도 중간값
-            linear_speed = np.clip(distance_error * 0.4, -0.3, 0.3)  # 적당한 속도
+            linear_speed = np.clip(distance_error * 0.6, -0.5, 0.5)  # 기존 0.4, ±0.3 → 0.6, ±0.5로 증가 (접근속도)
             self.robot_node.move_robot(MobileBaseCommander(linear_x=linear_speed, angular_z=0.0))
             time.sleep(0.05)
         
