@@ -63,8 +63,8 @@ class TaskImplementation(CompetitionTask):
         time.sleep(5)
         centers = detect_objects(use_mlp=True)
 
-        #self.object_detection_result = centers
-        self.object_detection_result = self.answer_sheet['mission_objects']
+        self.object_detection_result = centers
+        #self.object_detection_result = self.answer_sheet['mission_objects']
         for object_detection in centers:
             if object_detection['recyclable'] == True:
                 stage1_answer.append({
